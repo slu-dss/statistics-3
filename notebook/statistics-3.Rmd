@@ -1,0 +1,240 @@
+---
+title: "SLU DSS Spring 2020"
+subtitle: "Statistics in R: Session #3"
+author: "Cort W. Rudolph"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: ioslides_presentation
+widescreen: true
+smaller: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  tidy = FALSE,
+  message = FALSE,
+  warning = FALSE
+  )
+options(scipen = 99, digits = 3)
+```
+
+# Statistics in R|Session #2: Modeling Continuous Predictors
+
+## Needed packages
+- Let's load all the packages needed for this week. 
+- `ipak` codeblock available in the `RMarkdown` file:
+
+<!-- To install & load the required packages for this lecture, run this codeblock -->
+```{r echo=FALSE, message=FALSE, warning=FALSE, eval=FALSE}
+# ipak <- function(pkg){
+#     new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+#     if (length(new.pkg)) 
+#         install.packages(new.pkg, dependencies = TRUE)
+#     sapply(pkg, require, character.only = TRUE)
+# }
+# 
+# # usage
+# packages <- c("tidyverse", 
+#               "gapminder", 
+#               "broom",
+#               "knitr,"
+#               "kableExtra",
+#               "emmeans")
+# ipak(packages)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(gapminder)
+library(broom)
+library(knitr)
+library(kableExtra)
+library(emmeans)
+```
+
+# Modeling Categorical Predictors
+
+## Modeling Categorical Predictors
+Motivating research question:
+
+- "Are there significant differences in life expectancy, on average, between the five continents of the world: Africa, the Americas, Asia, Europe, and Oceania?"
+    
+## Modeling Categorical Predictors
+- To answer this questions, we'll use the `gapminder` dataset in the `gapminder` package. 
+- This dataset has international development statistics such as life expectancy, GDP per capita, and population by country ($n$ = 142) for 5-year intervals between 1952 and 2007. 
+
+## Modeling Categorical Predictors
+- We'll use this data for linear regression again, but note that our explanatory variable $x$ is now categorical, and not numerical like when we covered simple linear regression. More precisely, we have:
+
+    1. A numerical outcome variable $y$. In this case, life expectancy.
+    1. A single categorical explanatory variable $x$, In this case, the continent the country is part of. 
+
+## Modeling Categorical Predictors
+- Let's load the `gapminder` data and `filter()` for only observations in 2007. 
+- Then `select()` only the variables we'll need 
+- Lastly, we save this in a data frame with name `gapminder2007`:
+
+```{r, warning=FALSE, message=FALSE}
+gapminder2007 <- gapminder %>%
+  filter(year == 2007) %>% 
+  select(country, continent, lifeExp)
+```
+
+## Modeling Categorical Predictors
+
+First, let's take a look at the structure of our data:
+
+```{r  echo=FALSE}
+gapminder2007 %>%
+  sample_n(5) %>%
+  knitr::kable() %>% 
+  kable_styling(full_width = F)
+```
+
+## Modeling Categorical Predictors
+
+Next, let's create a table of descriptive statistics (i.e., means and SDs) by continent.
+
+These are the means (and the associated variability around them) that our statistical model is "modeling"
+
+```{r, echo=FALSE}
+lifeExp_by_continent <- gapminder2007 %>%
+  group_by(continent) %>%
+  summarize(mean = mean(lifeExp), sd = sd(lifeExp)) 
+
+lifeExp_by_continent %>%
+  kable() %>% 
+  kable_styling(full_width = FALSE)
+```
+
+## Modeling Categorical Predictors
+- Now, let's start making comparisons of life expectancy *between* continents. 
+- Let's use Africa as a *baseline for comparison*. 
+- Why Africa? Two reasons: 1) It has the lowest life expectancy, 2) It comes first alphabetically (and `R` defaults to alphabetical order to determine the baseline for comparison)
+
+## Modeling Categorical Predictors
+- Before we fit our regression model, let's create a summary table that reports the difference in mean life expectancy *relative* to Africa's mean life expectancy:
+
+```{r echo=FALSE}
+mean_africa <- lifeExp_by_continent %>%
+  filter(continent == "Africa") %>%
+  pull(mean)
+
+gapminder2007 %>%
+  group_by(continent) %>%
+  summarize(mean = mean(lifeExp)) %>%
+  mutate(`mean vs Africa` = mean - mean_africa) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+## Modeling Categorical Predictors
+- Now, let's use the `tidy()` function to get the *regression table* for the `gapminder2007` regression analysis: 
+
+## Modeling Categorical Predictors
+```{r, eval=FALSE}
+lm(lifeExp ~ continent, data = gapminder2007) %>% 
+  tidy(conf.int=TRUE) %>%
+  knitr::kable() %>% 
+  kable_styling(full_width = F)
+```
+
+## Modeling Categorical Predictors
+
+You might also be interested in model performance (e.g., "Does `continent` account for an *appreciable* amount of the variability in `lifeExp`)
+
+To do so, we can ask for an `anova` table, which gives us an omnibus test of $R^2$ (and answers our question, posed above)
+
+```{r}
+lm(lifeExp ~ continent, data = gapminder2007) %>% 
+  anova() %>%
+  tidy() %>%
+  knitr::kable() %>% 
+  kable_styling(full_width = F)
+```
+
+## Modeling Categorical Predictors
+
+As before, we can also get the corresponding $R^2$
+```{r}
+lm(lifeExp ~ continent, data = gapminder2007) %>% 
+  summary() %>% 
+  .$r.squared
+```
+
+## Modeling Categorical Predictors
+
+We can now ask another more nuanced question: "Which `continent`s differ from one-anther in terms of `lifeExp`?"
+
+To do so, we will estimate marginal means using `emmmeans::emmmeans`. 
+
+`emmmeans` work exactly like `ggeffects` used last time we met (i.e., for making predictions out of `lm` objects), but has extended flexibility for working with categorical predictors.
+
+```{r}
+lm(lifeExp ~ continent, data = gapminder2007) %>% 
+  emmeans(. , ~continent) %>% 
+  pairs() %>%
+  # confint() %>%
+  knitr::kable() %>% 
+  kable_styling(full_width = F)
+```
+
+## Modeling Categorical Predictors
+
+Visualizing mean differences:
+
+- The blue bars are 95% confidence intervals for the EMMs, and the red arrows are for the comparisons among them. 
+- If an arrow from one mean overlaps an arrow from another group, the difference is not “significant."
+- Based on the `adjust` setting (which defaults to "tukey") and the value of `alpha` (which defaults to 0.05).
+
+```{r}
+lm(lifeExp ~ continent, data = gapminder2007) %>% 
+  emmeans(. , ~continent) %>% 
+  plot(comparisons=TRUE)
+```
+
+
+
+
+# Your Turn!
+
+## CDC Data
+The Behavioral Risk Factor Surveillance System (BRFSS) is an annual telephone survey of 350,000 people in the United States conducted by the CDC
+
+Here, we will focus on a random sample of 20,000 people from the BRFSS survey conducted in 2000. While there are over 200 variables in this data set, for now, we will work with a small subset (i.e., just respondents height & weight):
+
+First, we load the data:
+```{r}
+source("http://www.openintro.org/stat/data/cdc.R")
+```
+
+Then, select a random sample of $n = 100$ respondents `weight`, `wtdesire`, and `genhlth`, and create a new variable `weight_goal` (`weight_goal` < 1 == lose weight, `weight_goal` > 1 == gain weight)
+```{r}
+set.seed(1818)
+cdc_subset<-cdc %>%
+  sample_n(100) %>%
+  select(weight, wtdesire, genhlth) %>%
+  mutate(weight_goal = wtdesire - weight)
+```
+
+# Table to demonstrate data structure
+```{r}
+cdc_subset %>%
+  sample_n(5) %>%
+  knitr::kable() %>% 
+  kable_styling(full_width = F)
+```
+
+# Estimate a model where `weight_goal` is regressed onto `genhlth`
+```{r, eval=FALSE}
+
+```
+
+# Which levels of `genhlth` differ from one-another on `weight_goal`?
+```{r}
+
+```
+
+# Plot these comparisons
+```{r}
+
+```
